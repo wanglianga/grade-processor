@@ -86,12 +86,13 @@ ipcMain.handle('save-file-dialog', async (event, { defaultName, filters }) => {
   return result.filePath
 })
 
+const processor = require('./src/processor/merger')
+const anomalyDetector = require('./src/processor/anomaly')
+
 ipcMain.handle('process-grades', async (event, { gradeData, studentRoster, courseCredits, overallFormula }) => {
-  const processor = require('./src/processor/merger')
-  const anomalyDetector = require('./src/processor/anomaly')
   try {
-    const merged = processor.mergeGrades(gradeData, studentRoster, courseCredits, overallFormula)
-    const anomalies = anomalyDetector.detect(merged, studentRoster, courseCredits, overallFormula)
+    const merged = processor.mergeGrades(gradeData, studentRoster || [], courseCredits || [], overallFormula)
+    const anomalies = anomalyDetector.detect(merged, studentRoster || [], courseCredits || [], overallFormula)
     const makeupList = anomalyDetector.getMakeupList(merged)
     const deferredList = anomalyDetector.getDeferredList(merged)
     const classSummary = anomalyDetector.getClassSummary(merged)

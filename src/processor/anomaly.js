@@ -1,10 +1,12 @@
+const merger = require('./merger')
+
 function detect(merged, studentRoster, courseCredits, overallFormula) {
   const anomalies = []
   const formula = overallFormula || { regularWeight: 0.3, finalWeight: 0.7 }
 
   const studentMap = new Map()
   for (const row of studentRoster) {
-    const norm = require('./merger').normalizeStudentRow(row)
+    const norm = merger.normalizeStudentRow(row)
     if (norm.studentId) studentMap.set(norm.studentId, norm)
   }
 

@@ -84,15 +84,24 @@ function calculateOverall(regularScore, finalScore, formula) {
   return Math.round((regularScore * r + finalScore * f) * 100) / 100
 }
 
+function normalizeGradeRows(gradeData) {
+  const normalizedGrades = []
+  for (const item of gradeData) {
+    if (Array.isArray(item)) {
+      for (const row of item) {
+        normalizedGrades.push(normalizeGradeRow(row))
+      }
+    } else if (item && typeof item === 'object') {
+      normalizedGrades.push(normalizeGradeRow(item))
+    }
+  }
+  return normalizedGrades
+}
+
 function mergeGrades(gradeData, studentRoster, courseCredits, overallFormula) {
   const formula = overallFormula || { regularWeight: 0.3, finalWeight: 0.7 }
 
-  const normalizedGrades = []
-  for (const sheetData of gradeData) {
-    for (const row of sheetData) {
-      normalizedGrades.push(normalizeGradeRow(row))
-    }
-  }
+  const normalizedGrades = normalizeGradeRows(gradeData)
 
   const studentMap = new Map()
   for (const row of studentRoster) {
