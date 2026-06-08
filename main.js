@@ -2,8 +2,42 @@ const { app, BrowserWindow, ipcMain, dialog } = require('electron')
 const path = require('path')
 const fs = require('fs')
 const XLSX = require('xlsx')
+const os = require('os')
 
 let mainWindow
+
+const TEMPLATE_DIR = path.join(os.homedir(), '.grade-processor')
+const TEMPLATE_FILE = path.join(TEMPLATE_DIR, 'course_templates.json')
+
+function ensureTemplateDir() {
+  if (!fs.existsSync(TEMPLATE_DIR)) {
+    fs.mkdirSync(TEMPLATE_DIR, { recursive: true })
+  }
+}
+
+function loadTemplates() {
+  ensureTemplateDir()
+  try {
+    if (fs.existsSync(TEMPLATE_FILE)) {
+      const data = fs.readFileSync(TEMPLATE_FILE, 'utf-8')
+      return JSON.parse(data)
+    }
+  } catch (err) {
+    console.error('Failed to load templates:', err.message)
+  }
+  return {}
+}
+
+function saveTemplates(templates) {
+  ensureTemplateDir()
+  try {
+    fs.writeFileSync(TEMPLATE_FILE, JSON.stringify(templates, null, 2), 'utf-8')
+    return true
+  } catch (err) {
+    console.error('Failed to save templates:', err.message)
+    return false
+  }
+}
 
 function createWindow() {
   mainWindow = new BrowserWindow({
@@ -89,14 +123,33 @@ ipcMain.handle('save-file-dialog', async (event, { defaultName, filters }) => {
 const processor = require('./src/processor/merger')
 const anomalyDetector = require('./src/processor/anomaly')
 
-ipcMain.handle('process-grades', async (event, { gradeData, studentRoster, courseCredits, overallFormula }) => {
+ipcMain.handle('process-grades', async (event, { gradeData, studentRoster, courseCredits, overallFormula, courseTemplates }) => {
   try {
-    const merged = processor.mergeGrades(gradeData, studentRoster || [], courseCredits || [], overallFormula)
-    const anomalies = anomalyDetector.detect(merged, studentRoster || [], courseCredits || [], overallFormula)
+    const merged = processor.mergeGrades(gradeData, studentRoster || [], courseCredits || [], overallFormula, courseTemplates || {})
+    const anomalies = anomalyDetector.detect(merged, studentRoster || [], courseCredits || [], overallFormula, courseTemplates || {})
     const makeupList = anomalyDetector.getMakeupList(merged)
     const deferredList = anomalyDetector.getDeferredList(merged)
     const classSummary = anomalyDetector.getClassSummary(merged)
-    return { success: true, merged, anomalies, makeupList, deferredList, classSummary }
+    const classTeacherView = anomalyDetector.getClassTeacherView(merged)
+    return { success: true, merged, anomalies, makeupList, deferredList, classSummary, classTeacherView }
+  } catch (err) {
+    return { success: false, error: err.message }
+  }
+})
+
+ipcMain.handle('load-templates', async () => {
+  try {
+    const templates = loadTemplates()
+    return { success: true, templates }
+  } catch (err) {
+    return { success: false, error: err.message }
+  }
+})
+
+ipcMain.handle('save-templates', async (event, templates) => {
+  try {
+    const result = saveTemplates(templates)
+    return { success: result }
   } catch (err) {
     return { success: false, error: err.message }
   }

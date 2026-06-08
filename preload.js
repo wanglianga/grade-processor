@@ -5,5 +5,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   readExcel: (filePath) => ipcRenderer.invoke('read-excel', filePath),
   saveExcel: (filePath, sheets) => ipcRenderer.invoke('save-excel', { filePath, sheets }),
   saveFileDialog: (options) => ipcRenderer.invoke('save-file-dialog', options),
-  processGrades: (data) => ipcRenderer.invoke('process-grades', data)
+  processGrades: (data) => ipcRenderer.invoke('process-grades', data),
+  loadTemplates: () => ipcRenderer.invoke('load-templates'),
+  saveTemplates: (templates) => ipcRenderer.invoke('save-templates', templates)
 })

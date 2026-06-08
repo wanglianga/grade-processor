@@ -8,6 +8,8 @@ function normalizeFieldNames(row) {
     '课程名': 'course',
     '平时分': 'regularScore',
     '平时成绩': 'regularScore',
+    '实验分': 'experimentScore',
+    '实验成绩': 'experimentScore',
     '期末分': 'finalScore',
     '期末成绩': 'finalScore',
     '总评': 'overallScore',
@@ -48,6 +50,7 @@ function normalizeGradeRow(row) {
     className: String(norm.className || '').trim(),
     course: String(norm.course || '').trim(),
     regularScore: parseNumberField(norm.regularScore),
+    experimentScore: parseNumberField(norm.experimentScore),
     finalScore: parseNumberField(norm.finalScore),
     overallScore: parseNumberField(norm.overallScore),
     credits: parseNumberField(norm.credits),
@@ -77,11 +80,25 @@ function normalizeCreditRow(row) {
   }
 }
 
-function calculateOverall(regularScore, finalScore, formula) {
-  if (regularScore === null || finalScore === null) return null
+function calculateOverall(regularScore, finalScore, formula, experimentScore) {
   const r = formula.regularWeight || 0.3
   const f = formula.finalWeight || 0.7
+  const e = formula.experimentWeight || 0
+
+  if (e > 0) {
+    if (regularScore === null || finalScore === null || experimentScore === null) return null
+    return Math.round((regularScore * r + experimentScore * e + finalScore * f) * 100) / 100
+  }
+
+  if (regularScore === null || finalScore === null) return null
   return Math.round((regularScore * r + finalScore * f) * 100) / 100
+}
+
+function getFormulaForCourse(course, courseTemplates, defaultFormula) {
+  if (courseTemplates && courseTemplates[course]) {
+    return courseTemplates[course]
+  }
+  return defaultFormula
 }
 
 function normalizeGradeRows(gradeData) {
@@ -98,8 +115,8 @@ function normalizeGradeRows(gradeData) {
   return normalizedGrades
 }
 
-function mergeGrades(gradeData, studentRoster, courseCredits, overallFormula) {
-  const formula = overallFormula || { regularWeight: 0.3, finalWeight: 0.7 }
+function mergeGrades(gradeData, studentRoster, courseCredits, overallFormula, courseTemplates) {
+  const defaultFormula = overallFormula || { regularWeight: 0.3, finalWeight: 0.7 }
 
   const normalizedGrades = normalizeGradeRows(gradeData)
 
@@ -123,6 +140,7 @@ function mergeGrades(gradeData, studentRoster, courseCredits, overallFormula) {
   for (const g of normalizedGrades) {
     const student = studentMap.get(g.studentId)
     const credit = creditMap.get(g.course)
+    const formula = getFormulaForCourse(g.course, courseTemplates, defaultFormula)
 
     const enriched = {
       ...g,
@@ -131,7 +149,8 @@ function mergeGrades(gradeData, studentRoster, courseCredits, overallFormula) {
       credits: g.credits !== null ? g.credits : (credit ? credit.credits : null),
       teacher: g.teacher || (credit ? credit.teacher : ''),
       studentExists: !!student,
-      calculatedOverall: calculateOverall(g.regularScore, g.finalScore, formula)
+      calculatedOverall: calculateOverall(g.regularScore, g.finalScore, formula, g.experimentScore),
+      formulaUsed: formula
     }
 
     merged.push(enriched)
@@ -140,4 +159,4 @@ function mergeGrades(gradeData, studentRoster, courseCredits, overallFormula) {
   return merged
 }
 
-module.exports = { mergeGrades, normalizeGradeRow, normalizeStudentRow, normalizeCreditRow, calculateOverall }
+module.exports = { mergeGrades, normalizeGradeRow, normalizeStudentRow, normalizeCreditRow, calculateOverall, getFormulaForCourse }

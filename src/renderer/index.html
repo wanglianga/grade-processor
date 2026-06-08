@@ -74,13 +74,49 @@
           <h2>⚙️ 计算配置</h2>
           <div class="config-group">
             <label>平时成绩权重</label>
-            <input type="number" id="regularWeight" value="0.3" min="0" max="1" step="0.1">
+            <input type="number" id="regularWeight" value="0.3" min="0" max="1" step="0.05">
+          </div>
+          <div class="config-group">
+            <label>实验成绩权重</label>
+            <input type="number" id="experimentWeight" value="0" min="0" max="1" step="0.05">
           </div>
           <div class="config-group">
             <label>期末成绩权重</label>
-            <input type="number" id="finalWeight" value="0.7" min="0" max="1" step="0.1">
+            <input type="number" id="finalWeight" value="0.7" min="0" max="1" step="0.05">
           </div>
           <div class="weight-hint" id="weightHint">权重合计：1.0</div>
+        </section>
+
+        <section class="template-section">
+          <h2>📐 课程规则模板</h2>
+          <div class="template-actions">
+            <button class="btn btn-sm" id="addTemplateBtn">+ 新增模板</button>
+          </div>
+          <div class="template-list" id="templateList"></div>
+          <div class="template-editor" id="templateEditor" style="display:none">
+            <div class="template-editor-title" id="templateEditorTitle">新增课程模板</div>
+            <div class="config-group">
+              <label>课程名称</label>
+              <input type="text" id="templateCourseName" placeholder="输入课程名称">
+            </div>
+            <div class="config-group">
+              <label>平时分权重</label>
+              <input type="number" id="templateRegular" value="0.3" min="0" max="1" step="0.05">
+            </div>
+            <div class="config-group">
+              <label>实验分权重</label>
+              <input type="number" id="templateExperiment" value="0" min="0" max="1" step="0.05">
+            </div>
+            <div class="config-group">
+              <label>期末分权重</label>
+              <input type="number" id="templateFinal" value="0.7" min="0" max="1" step="0.05">
+            </div>
+            <div class="weight-hint" id="templateWeightHint">权重合计：1.0</div>
+            <div class="template-editor-actions">
+              <button class="btn btn-sm btn-primary" id="saveTemplateBtn">保存</button>
+              <button class="btn btn-sm" id="cancelTemplateBtn">取消</button>
+            </div>
+          </div>
         </section>
 
         <button id="processBtn" class="btn btn-primary btn-lg" disabled>
@@ -94,6 +130,7 @@
           <button class="tab" data-tab="anomalies">⚠️ 异常检测 <span class="badge" id="anomalyBadge" style="display:none">0</span></button>
           <button class="tab" data-tab="makeup">📝 补考名单</button>
           <button class="tab" data-tab="deferred">⏸️ 缓考名单</button>
+          <button class="tab" data-tab="classTeacher">👨‍🏫 班主任确认</button>
           <button class="tab" data-tab="summary">📈 班级汇总</button>
         </div>
 
@@ -132,6 +169,25 @@
             <button class="btn" id="exportDeferred">📤 导出缓考名单</button>
           </div>
           <div class="table-container" id="deferredTable"></div>
+        </div>
+
+        <div class="tab-content" id="tab-classTeacher">
+          <div class="tab-toolbar">
+            <select id="classFilter" class="filter-select">
+              <option value="all">全部班级</option>
+            </select>
+            <select id="problemTypeFilter" class="filter-select">
+              <option value="all">全部类型</option>
+              <option value="failed">挂科</option>
+              <option value="absent">缺考</option>
+              <option value="cheating">作弊</option>
+              <option value="gpaAbnormal">绩点异常</option>
+            </select>
+            <button class="btn" id="confirmSelectedBtn">✅ 确认选中</button>
+            <button class="btn" id="confirmAllBtn">✅ 确认全部</button>
+            <button class="btn" id="exportConfirmedBtn">📤 导出通知名单</button>
+          </div>
+          <div class="table-container" id="classTeacherTable"></div>
         </div>
 
         <div class="tab-content" id="tab-summary">
