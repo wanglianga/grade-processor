@@ -1,0 +1,19 @@
+{
+  "name": "grade-processor",
+  "version": "1.0.0",
+  "description": "学校成绩单离线处理器 - Electron桌面应用",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "dev": "electron .",
+    "build": "electron-builder",
+    "test": "echo \"no tests\" && exit 0"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "electron": "^35.7.5",
+    "xlsx": "^0.18.5"
+  }
+}

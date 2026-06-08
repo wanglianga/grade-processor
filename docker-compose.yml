@@ -1,0 +1,9 @@
+services:
+  grade-processor:
+    build: .
+    container_name: grade-processor
+    environment:
+      - DISPLAY=:99
+    volumes:
+      - ./data:/app/data
+    shm_size: '2gb'
