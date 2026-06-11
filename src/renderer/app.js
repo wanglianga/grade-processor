@@ -9,13 +9,16 @@ const state = {
   anomalies: [],
   makeupList: [],
   deferredList: [],
+  deferredSchedule: [],
+  revisionRecords: [],
   classSummary: [],
   classTeacherView: [],
   gradeSheetMap: {},
   studentSheetMap: {},
   creditSheetMap: {},
   courseTemplates: {},
-  editingTemplateKey: null
+  editingTemplateKey: null,
+  deferredViewMode: 'list'
 }
 
 function showToast(msg, type) {
@@ -217,6 +220,8 @@ async function processGrades() {
     state.anomalies = result.anomalies
     state.makeupList = result.makeupList
     state.deferredList = result.deferredList
+    state.deferredSchedule = result.deferredSchedule
+    state.revisionRecords = result.revisionRecords || []
     state.classSummary = result.classSummary
     state.classTeacherView = result.classTeacherView
 
@@ -224,12 +229,17 @@ async function processGrades() {
     renderAnomalyTable()
     renderMakeupTable()
     renderDeferredTable()
+    renderRevisionTable()
     renderClassTeacherTable()
     renderSummaryTable()
 
-    const badge = document.getElementById('anomalyBadge')
-    badge.textContent = state.anomalies.length
-    badge.style.display = state.anomalies.length > 0 ? 'inline-flex' : 'none'
+    const anomalyBadge = document.getElementById('anomalyBadge')
+    anomalyBadge.textContent = state.anomalies.length
+    anomalyBadge.style.display = state.anomalies.length > 0 ? 'inline-flex' : 'none'
+
+    const revisionBadge = document.getElementById('revisionBadge')
+    revisionBadge.textContent = state.revisionRecords.length
+    revisionBadge.style.display = state.revisionRecords.length > 0 ? 'inline-flex' : 'none'
 
     updateClassFilterOptions()
 
@@ -356,6 +366,15 @@ function renderMakeupTable() {
 
 function renderDeferredTable() {
   const container = document.getElementById('deferredTable')
+
+  if (state.deferredViewMode === 'schedule') {
+    renderDeferredScheduleView(container)
+  } else {
+    renderDeferredListView(container)
+  }
+}
+
+function renderDeferredListView(container) {
   const data = state.deferredList
 
   if (data.length === 0) {
@@ -366,7 +385,7 @@ function renderDeferredTable() {
   container.innerHTML = `
     <table>
       <thead>
-        <tr><th>学号</th><th>姓名</th><th>班级</th><th>课程</th><th>学分</th><th>任课教师</th></tr>
+        <tr><th>学号</th><th>姓名</th><th>班级</th><th>课程</th><th>平时分</th><th>期末分</th><th>总评</th><th>学分</th><th>任课教师</th></tr>
       </thead>
       <tbody>
         ${data.map(r => `<tr>
@@ -374,12 +393,128 @@ function renderDeferredTable() {
           <td>${r.name}</td>
           <td>${r.className}</td>
           <td>${r.course}</td>
+          <td>${formatScore(r.regularScore)}</td>
+          <td>${formatScore(r.finalScore)}</td>
+          <td>${formatScore(r.overallScore)}</td>
           <td>${r.credits !== null ? r.credits : '-'}</td>
           <td>${r.teacher}</td>
         </tr>`).join('')}
       </tbody>
     </table>
   `
+}
+
+function renderDeferredScheduleView(container) {
+  const data = state.deferredSchedule
+
+  if (data.length === 0) {
+    container.innerHTML = '<div class="empty-state"><div class="empty-state-icon">📋</div><div class="empty-state-text">无缓考安排</div></div>'
+    return
+  }
+
+  let html = ''
+  for (const course of data) {
+    html += `<div class="summary-card">
+      <h3>${course.course} <span class="class-teacher-count">(${course.students.length} 人)</span></h3>
+      <div class="course-info-row">
+        <span class="course-info-item">任课教师：<strong>${course.teacher || '待安排'}</strong></span>
+        <span class="course-info-item">学分：<strong>${course.credits !== null ? course.credits : '-'}</strong></span>
+      </div>
+      <table>
+        <thead>
+          <tr><th>学号</th><th>姓名</th><th>班级</th><th>平时分</th><th>期末分</th><th>总评</th></tr>
+        </thead>
+        <tbody>
+          ${course.students.map(s => `<tr>
+            <td>${s.studentId}</td>
+            <td>${s.name}</td>
+            <td>${s.className}</td>
+            <td>${formatScore(s.regularScore)}</td>
+            <td>${formatScore(s.finalScore)}</td>
+            <td>${formatScore(s.overallScore)}</td>
+          </tr>`).join('')}
+        </tbody>
+      </table>
+    </div>`
+  }
+  container.innerHTML = html
+}
+
+function renderRevisionTable(filter) {
+  const container = document.getElementById('revisionTable')
+  let data = state.revisionRecords
+
+  if (filter && filter !== 'all') {
+    if (filter === 'makeupChanged') {
+      data = data.filter(r => r.makeupStatusChanged)
+    } else {
+      data = data.filter(r => r.type === filter)
+    }
+  }
+
+  if (data.length === 0) {
+    container.innerHTML = '<div class="empty-state"><div class="empty-state-icon">📝</div><div class="empty-state-text">暂无成绩修订记录<br><small>重新导入成绩后将自动对比并显示修订记录</small></div></div>'
+    return
+  }
+
+  container.innerHTML = `
+    <table>
+      <thead>
+        <tr>
+          <th>类型</th><th>学号</th><th>姓名</th><th>班级</th><th>课程</th>
+          <th>平时分<br><small>修改前 → 修改后</small></th>
+          <th>期末分<br><small>修改前 → 修改后</small></th>
+          <th>总评<br><small>修改前 → 修改后</small></th>
+          <th>缓考</th><th>补考资格影响</th><th>修改来源</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${data.map(r => `<tr>
+          <td><span class="status-tag ${r.type === '修改' ? 'warning' : r.type === '新增' ? 'success' : 'error'}">${r.type}</span></td>
+          <td>${r.studentId}</td>
+          <td>${r.name}</td>
+          <td>${r.className}</td>
+          <td>${r.course}</td>
+          <td>${formatScoreChange(r.oldRegularScore, r.newRegularScore)}</td>
+          <td>${formatScoreChange(r.oldFinalScore, r.newFinalScore)}</td>
+          <td>${formatScoreChange(r.oldOverallScore, r.newOverallScore)}</td>
+          <td>${formatBoolChange(r.oldDeferred, r.newDeferred)}</td>
+          <td>${formatMakeupChange(r)}</td>
+          <td>${r.source || '-'}</td>
+        </tr>`).join('')}
+      </tbody>
+    </table>
+  `
+}
+
+function formatScoreChange(oldVal, newVal) {
+  const oldStr = oldVal === null || oldVal === undefined ? '-' : oldVal
+  const newStr = newVal === null || newVal === undefined ? '-' : newVal
+  const changed = oldVal !== newVal
+  if (changed && oldVal !== null && newVal !== null) {
+    const diff = Math.round((newVal - oldVal) * 100) / 100
+    const diffClass = diff > 0 ? 'score-up' : 'score-down'
+    return `<span class="score-changed">${oldStr} → <strong>${newStr}</strong> <span class="${diffClass}">(${diff > 0 ? '+' : ''}${diff})</span></span>`
+  }
+  return `${oldStr} → ${newStr}`
+}
+
+function formatBoolChange(oldVal, newVal) {
+  const oldStr = oldVal === null || oldVal === undefined ? '-' : (oldVal ? '是' : '否')
+  const newStr = newVal === null || newVal === undefined ? '-' : (newVal ? '是' : '否')
+  if (oldVal !== newVal) {
+    return `<span class="score-changed">${oldStr} → <strong>${newStr}</strong></span>`
+  }
+  return `${oldStr} → ${newStr}`
+}
+
+function formatMakeupChange(record) {
+  if (!record.makeupStatusChanged) {
+    return '<span class="boolean-no">无变化</span>'
+  }
+  const oldStr = record.oldMakeupEligible === null ? '-' : (record.oldMakeupEligible ? '需补考' : '不需补考')
+  const newStr = record.newMakeupEligible === null ? '-' : (record.newMakeupEligible ? '需补考' : '不需补考')
+  return `<span class="score-changed status-tag warning">${oldStr} → ${newStr}</span>`
 }
 
 function renderSummaryTable() {
@@ -445,10 +580,39 @@ async function exportData(type) {
       '学分': r.credits, '总评成绩': r.overallScore, '缺考': r.absent ? '是' : '否',
       '任课教师': r.teacher
     }))
-  } else if (type === '缓考名单') {
+  } else if (type === '缓考安排') {
     sheets['缓考名单'] = state.deferredList.map(r => ({
       '学号': r.studentId, '姓名': r.name, '班级': r.className, '课程': r.course,
+      '平时分': r.regularScore, '期末分': r.finalScore, '总评': r.overallScore,
       '学分': r.credits, '任课教师': r.teacher
+    }))
+    for (const course of state.deferredSchedule) {
+      const sheetName = course.course.length > 25 ? course.course.substring(0, 25) : course.course
+      sheets[`安排_${sheetName}`] = [
+        { '课程': course.course, '任课教师': course.teacher, '学分': course.credits, '缓考人数': course.students.length },
+        {},
+        { '学号': '学号', '姓名': '姓名', '班级': '班级', '平时分': '平时分', '期末分': '期末分', '总评': '总评' },
+        ...course.students.map(s => ({
+          '学号': s.studentId, '姓名': s.name, '班级': s.className,
+          '平时分': s.regularScore, '期末分': s.finalScore, '总评': s.overallScore
+        }))
+      ]
+    }
+  } else if (type === '成绩修订') {
+    sheets['成绩修订记录'] = state.revisionRecords.map(r => ({
+      '类型': r.type,
+      '学号': r.studentId, '姓名': r.name, '班级': r.className, '课程': r.course,
+      '平时分(修改前)': r.oldRegularScore, '平时分(修改后)': r.newRegularScore,
+      '期末分(修改前)': r.oldFinalScore, '期末分(修改后)': r.newFinalScore,
+      '总评(修改前)': r.oldOverallScore, '总评(修改后)': r.newOverallScore,
+      '缓考(修改前)': r.oldDeferred ? '是' : (r.oldDeferred === false ? '否' : '-'),
+      '缓考(修改后)': r.newDeferred ? '是' : (r.newDeferred === false ? '否' : '-'),
+      '补考资格(修改前)': r.oldMakeupEligible === null ? '-' : (r.oldMakeupEligible ? '需补考' : '不需补考'),
+      '补考资格(修改后)': r.newMakeupEligible === null ? '-' : (r.newMakeupEligible ? '需补考' : '不需补考'),
+      '补考资格变化': r.makeupStatusChanged ? '是' : '否',
+      '修改来源': r.source || '-',
+      '任课教师': r.teacher,
+      '学分': r.credits
     }))
   } else if (type === '班级汇总') {
     for (const cls of state.classSummary) {
@@ -896,8 +1060,37 @@ document.addEventListener('DOMContentLoaded', async () => {
   document.getElementById('exportMerged').addEventListener('click', () => exportData('合并成绩'))
   document.getElementById('exportAnomalies').addEventListener('click', () => exportData('异常清单'))
   document.getElementById('exportMakeup').addEventListener('click', () => exportData('补考名单'))
-  document.getElementById('exportDeferred').addEventListener('click', () => exportData('缓考名单'))
+  document.getElementById('exportDeferred').addEventListener('click', () => exportData('缓考安排'))
+  document.getElementById('exportRevision').addEventListener('click', () => exportData('成绩修订'))
   document.getElementById('exportSummary').addEventListener('click', () => exportData('班级汇总'))
+
+  document.getElementById('deferredViewList').addEventListener('click', () => {
+    state.deferredViewMode = 'list'
+    document.getElementById('deferredViewList').classList.add('active')
+    document.getElementById('deferredViewSchedule').classList.remove('active')
+    renderDeferredTable()
+  })
+  document.getElementById('deferredViewSchedule').addEventListener('click', () => {
+    state.deferredViewMode = 'schedule'
+    document.getElementById('deferredViewSchedule').classList.add('active')
+    document.getElementById('deferredViewList').classList.remove('active')
+    renderDeferredTable()
+  })
+
+  document.getElementById('revisionFilter').addEventListener('change', (e) => {
+    renderRevisionTable(e.target.value)
+  })
+
+  document.getElementById('clearRevisionBtn').addEventListener('click', async () => {
+    if (confirm('确定要清除修订历史吗？清除后将无法对比之前的成绩数据。')) {
+      await window.electronAPI.clearLastData()
+      state.revisionRecords = []
+      renderRevisionTable()
+      const badge = document.getElementById('revisionBadge')
+      badge.style.display = 'none'
+      showToast('修订历史已清除', 'info')
+    }
+  })
 
   document.getElementById('addTemplateBtn').addEventListener('click', () => showTemplateEditor(null))
   document.getElementById('saveTemplateBtn').addEventListener('click', saveCurrentTemplate)

@@ -5,6 +5,7 @@ const XLSX = require('xlsx')
 const os = require('os')
 
 let mainWindow
+let lastMergedData = []
 
 const TEMPLATE_DIR = path.join(os.homedir(), '.grade-processor')
 const TEMPLATE_FILE = path.join(TEMPLATE_DIR, 'course_templates.json')
@@ -123,18 +124,32 @@ ipcMain.handle('save-file-dialog', async (event, { defaultName, filters }) => {
 const processor = require('./src/processor/merger')
 const anomalyDetector = require('./src/processor/anomaly')
 
-ipcMain.handle('process-grades', async (event, { gradeData, studentRoster, courseCredits, overallFormula, courseTemplates }) => {
+ipcMain.handle('process-grades', async (event, { gradeData, studentRoster, courseCredits, overallFormula, courseTemplates, sourceInfo }) => {
   try {
     const merged = processor.mergeGrades(gradeData, studentRoster || [], courseCredits || [], overallFormula, courseTemplates || {})
     const anomalies = anomalyDetector.detect(merged, studentRoster || [], courseCredits || [], overallFormula, courseTemplates || {})
     const makeupList = anomalyDetector.getMakeupList(merged)
     const deferredList = anomalyDetector.getDeferredList(merged)
+    const deferredSchedule = anomalyDetector.getDeferredSchedule(merged)
     const classSummary = anomalyDetector.getClassSummary(merged)
     const classTeacherView = anomalyDetector.getClassTeacherView(merged)
-    return { success: true, merged, anomalies, makeupList, deferredList, classSummary, classTeacherView }
+
+    let revisionRecords = []
+    if (lastMergedData && lastMergedData.length > 0) {
+      revisionRecords = anomalyDetector.compareGrades(lastMergedData, merged, sourceInfo || '重新导入成绩')
+    }
+
+    lastMergedData = merged
+
+    return { success: true, merged, anomalies, makeupList, deferredList, deferredSchedule, classSummary, classTeacherView, revisionRecords }
   } catch (err) {
     return { success: false, error: err.message }
   }
+})
+
+ipcMain.handle('clear-last-data', async () => {
+  lastMergedData = []
+  return { success: true }
 })
 
 ipcMain.handle('load-templates', async () => {

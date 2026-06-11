@@ -144,11 +144,51 @@ function getDeferredList(merged) {
         className: record.className,
         course: record.course,
         credits: record.credits,
-        teacher: record.teacher
+        regularScore: record.regularScore,
+        experimentScore: record.experimentScore,
+        finalScore: record.finalScore,
+        overallScore: record.overallScore,
+        teacher: record.teacher,
+        absent: record.absent,
+        cheating: record.cheating
       })
     }
   }
   return deferredRecords
+}
+
+function getDeferredSchedule(merged) {
+  const courseMap = new Map()
+  for (const record of merged) {
+    if (record.deferred === true) {
+      const course = record.course || '未知课程'
+      if (!courseMap.has(course)) {
+        courseMap.set(course, {
+          course: course,
+          teacher: record.teacher || '',
+          credits: record.credits || null,
+          students: []
+        })
+      }
+      const courseData = courseMap.get(course)
+      if (!courseData.teacher && record.teacher) {
+        courseData.teacher = record.teacher
+      }
+      if (courseData.credits === null && record.credits !== null) {
+        courseData.credits = record.credits
+      }
+      courseData.students.push({
+        studentId: record.studentId,
+        name: record.name,
+        className: record.className,
+        regularScore: record.regularScore,
+        experimentScore: record.experimentScore,
+        finalScore: record.finalScore,
+        overallScore: record.overallScore
+      })
+    }
+  }
+  return Array.from(courseMap.values())
 }
 
 function getClassSummary(merged) {
@@ -351,4 +391,135 @@ function getClassTeacherView(merged) {
   return result
 }
 
-module.exports = { detect, getMakeupList, getDeferredList, getClassSummary, calculateGPA, getGPAAnomalies, getClassTeacherView }
+function compareGrades(oldMerged, newMerged, sourceInfo) {
+  const revisionRecords = []
+  const oldMap = new Map()
+
+  for (const record of oldMerged) {
+    const key = `${record.studentId}|||${record.course}`
+    oldMap.set(key, record)
+  }
+
+  for (const newRecord of newMerged) {
+    const key = `${newRecord.studentId}|||${newRecord.course}`
+    const oldRecord = oldMap.get(key)
+
+    if (!oldRecord) {
+      revisionRecords.push({
+        type: '新增',
+        studentId: newRecord.studentId,
+        name: newRecord.name,
+        className: newRecord.className,
+        course: newRecord.course,
+        oldRegularScore: null,
+        newRegularScore: newRecord.regularScore,
+        oldExperimentScore: null,
+        newExperimentScore: newRecord.experimentScore,
+        oldFinalScore: null,
+        newFinalScore: newRecord.finalScore,
+        oldOverallScore: null,
+        newOverallScore: newRecord.overallScore,
+        oldAbsent: null,
+        newAbsent: newRecord.absent,
+        oldCheating: null,
+        newCheating: newRecord.cheating,
+        oldDeferred: null,
+        newDeferred: newRecord.deferred,
+        source: sourceInfo || '重新导入',
+        oldMakeupEligible: null,
+        newMakeupEligible: isMakeupEligible(newRecord),
+        makeupStatusChanged: false,
+        teacher: newRecord.teacher,
+        credits: newRecord.credits
+      })
+      oldMap.delete(key)
+      continue
+    }
+
+    const changed = hasScoreChanged(oldRecord, newRecord)
+    if (changed) {
+      const oldEligible = isMakeupEligible(oldRecord)
+      const newEligible = isMakeupEligible(newRecord)
+      revisionRecords.push({
+        type: '修改',
+        studentId: newRecord.studentId,
+        name: newRecord.name,
+        className: newRecord.className,
+        course: newRecord.course,
+        oldRegularScore: oldRecord.regularScore,
+        newRegularScore: newRecord.regularScore,
+        oldExperimentScore: oldRecord.experimentScore,
+        newExperimentScore: newRecord.experimentScore,
+        oldFinalScore: oldRecord.finalScore,
+        newFinalScore: newRecord.finalScore,
+        oldOverallScore: oldRecord.overallScore,
+        newOverallScore: newRecord.overallScore,
+        oldAbsent: oldRecord.absent,
+        newAbsent: newRecord.absent,
+        oldCheating: oldRecord.cheating,
+        newCheating: newRecord.cheating,
+        oldDeferred: oldRecord.deferred,
+        newDeferred: newRecord.deferred,
+        source: sourceInfo || '重新导入',
+        oldMakeupEligible: oldEligible,
+        newMakeupEligible: newEligible,
+        makeupStatusChanged: oldEligible !== newEligible,
+        teacher: newRecord.teacher,
+        credits: newRecord.credits
+      })
+    }
+    oldMap.delete(key)
+  }
+
+  for (const [key, oldRecord] of oldMap) {
+    revisionRecords.push({
+      type: '删除',
+      studentId: oldRecord.studentId,
+      name: oldRecord.name,
+      className: oldRecord.className,
+      course: oldRecord.course,
+      oldRegularScore: oldRecord.regularScore,
+      newRegularScore: null,
+      oldExperimentScore: oldRecord.experimentScore,
+      newExperimentScore: null,
+      oldFinalScore: oldRecord.finalScore,
+      newFinalScore: null,
+      oldOverallScore: oldRecord.overallScore,
+      newOverallScore: null,
+      oldAbsent: oldRecord.absent,
+      newAbsent: null,
+      oldCheating: oldRecord.cheating,
+      newCheating: null,
+      oldDeferred: oldRecord.deferred,
+      newDeferred: null,
+      source: sourceInfo || '重新导入',
+      oldMakeupEligible: isMakeupEligible(oldRecord),
+      newMakeupEligible: null,
+      makeupStatusChanged: true,
+      teacher: oldRecord.teacher,
+      credits: oldRecord.credits
+    })
+  }
+
+  return revisionRecords
+}
+
+function isMakeupEligible(record) {
+  if (!record) return null
+  const needMakeup = (record.overallScore !== null && record.overallScore < 60) || record.absent === true
+  const cheating = record.cheating === true
+  const deferred = record.deferred === true
+  return needMakeup && !cheating && !deferred
+}
+
+function hasScoreChanged(oldRecord, newRecord) {
+  return oldRecord.regularScore !== newRecord.regularScore ||
+    oldRecord.experimentScore !== newRecord.experimentScore ||
+    oldRecord.finalScore !== newRecord.finalScore ||
+    oldRecord.overallScore !== newRecord.overallScore ||
+    oldRecord.absent !== newRecord.absent ||
+    oldRecord.cheating !== newRecord.cheating ||
+    oldRecord.deferred !== newRecord.deferred
+}
+
+module.exports = { detect, getMakeupList, getDeferredList, getDeferredSchedule, getClassSummary, calculateGPA, getGPAAnomalies, getClassTeacherView, compareGrades, isMakeupEligible }

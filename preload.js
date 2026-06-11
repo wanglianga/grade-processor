@@ -7,5 +7,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
   saveFileDialog: (options) => ipcRenderer.invoke('save-file-dialog', options),
   processGrades: (data) => ipcRenderer.invoke('process-grades', data),
   loadTemplates: () => ipcRenderer.invoke('load-templates'),
-  saveTemplates: (templates) => ipcRenderer.invoke('save-templates', templates)
+  saveTemplates: (templates) => ipcRenderer.invoke('save-templates', templates),
+  clearLastData: () => ipcRenderer.invoke('clear-last-data')
 })
